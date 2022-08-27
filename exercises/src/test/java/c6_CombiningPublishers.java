@@ -59,12 +59,8 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void task_executor() {
-        //todo: feel free to change code as you need
-        Flux<Void> tasks = taskExecutor().flatMap(m -> {
-            m.block();
-            return Mono.empty();
-        });
-        // but why flux of mono.empty() is flux of void
+        Flux<Void> tasks = taskExecutor()
+                .flatMap(Function.identity());
 
         //don't change below this l¶ine
         StepVerifier.create(tasks)
@@ -200,8 +196,7 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
         //todo: feel free to change code as you need
         autoComplete(null);
         Flux<String> suggestions = userSearchInput()
-                .delaySequence(Duration.ofMillis(400)).flatMap(this::autoComplete)//todo: use one operator only
-                ;
+                .switchMap(this::autoComplete);
 
         //don't change below this line
         StepVerifier.create(suggestions)
@@ -217,16 +212,11 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void prettify() {
-        //todo: feel free to change code as you need
-        //todo: use when,and,then...
-        Mono<Boolean> successful = openFile()
-                .then(writeToFile("0x3522285912341"))
-                .then(closeFile())
-                .then(Mono.just(Boolean.TRUE));
-
-        openFile();
-        writeToFile("0x3522285912341");
-        closeFile();
+        Mono<Boolean> successful =
+                Mono.when(openFile())
+                    .then(writeToFile("0x3522285912341"))
+                    .then(closeFile())
+                    .thenReturn(true);
 
         //don't change below this line
         StepVerifier.create(successful)
@@ -257,13 +247,11 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
      */
     @Test
     public void acid_durability() {
-        //todo: feel free to change code as you need
         Flux<String> committedTasksIds = tasksToExecute()
-                .flatMapSequential(t -> {
-                    String tid = t.block();
-                    commitTask(tid).block();
-                    return Mono.just(tid);
-                });
+                .concatMap(task ->
+                                   task.flatMap(taskId -> commitTask(taskId)
+                                           .thenReturn(taskId))
+                );
 
         //don't change below this line
         StepVerifier.create(committedTasksIds)
@@ -360,9 +348,11 @@ public class c6_CombiningPublishers extends CombiningPublishersBase {
     public void cleanup() {
         BlockHound.install(); //don't change this line, blocking = cheating!
 
-        //todo: feel free to change code as you need
-        Flux<String> stream = StreamingConnection.startStreaming()
-             .flatMapMany(Function.identity());
+        Flux<String> stream = Flux.usingWhen(
+                StreamingConnection.startStreaming(), //resource supplier -> supplies Flux from Mono
+                n -> n,//resource closure  -> closure in this case is same as Flux completion
+                tr -> StreamingConnection.closeConnection()//<-async complete, executes asynchronously after closure
+        );
 
         //don't change below this line
         StepVerifier.create(stream)

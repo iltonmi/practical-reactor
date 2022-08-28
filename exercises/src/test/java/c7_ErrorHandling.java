@@ -5,7 +5,6 @@ import reactor.test.StepVerifier;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
-import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -106,7 +105,10 @@ public class c7_ErrorHandling extends ErrorHandlingBase {
     public void error_reporter() {
         //todo: feel free to change code as you need
         Flux<String> messages = messageNode()
-                .onErrorResume(e -> this.errorReportService(e).thenMany(Flux.error(e)));
+                // here the reason why then can also be used is that
+                // onErrorResume will resume a stream from a publisher no matter how many
+                // items in the stream
+                .onErrorResume(e -> this.errorReportService(e).then(Mono.error(e)));
         //don't change below this line
         StepVerifier.create(messages)
                     .expectNext("0x1", "0x2")
@@ -125,7 +127,7 @@ public class c7_ErrorHandling extends ErrorHandlingBase {
         Flux<Task> taskFlux = taskQueue()
                 .flatMapSequential(t ->
                         t.execute().then(t.commit())
-                        .onErrorResume(t::rollback).thenMany(Flux.just(t))
+                        .onErrorResume(t::rollback).thenReturn(t) // same reason as question above
                 )
                 ;
 
@@ -201,7 +203,8 @@ public class c7_ErrorHandling extends ErrorHandlingBase {
     @Test
     public void back_off() {
         Mono<String> connection_result = establishConnection()
-                .retryWhen(Retry.fixedDelay(3, Duration.ofSeconds(5)))
+                // db will be up in 5 seconds, so 3 attempts in 6 seconds can cover
+                .retryWhen(Retry.backoff(3, Duration.ofSeconds(3)))
                 ;
 
         StepVerifier.create(connection_result)
@@ -216,10 +219,9 @@ public class c7_ErrorHandling extends ErrorHandlingBase {
      */
     @Test
     public void good_old_polling() {
-        //todo: change code as you need
-        Flux<String> alerts = Flux.just(nodeAlerts(), nodeAlerts())
-                .concatMap(r -> r.switchIfEmpty(Mono.error(RuntimeException::new)))
-                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(1)));
+        Flux<String> alerts = nodeAlerts()
+                .repeatWhenEmpty(i -> i.delayElements(Duration.ofSeconds(1)))
+                        .repeat(2);
 
         //don't change below this line
         StepVerifier.create(alerts.take(2))

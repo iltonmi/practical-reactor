@@ -1,12 +1,10 @@
 import org.junit.jupiter.api.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.SignalType;
 import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.List;
 
 /**
@@ -35,7 +33,6 @@ public class c8_Sinks extends SinksBase {
      */
     @Test
     public void single_shooter() {
-        //todo: feel free to change code as you need
         Sinks.One<Boolean> sink = Sinks.one();
         Mono<Boolean> operationCompleted = sink.asMono();
         submitOperation(() -> {
@@ -58,7 +55,6 @@ public class c8_Sinks extends SinksBase {
      */
     @Test
     public void single_subscriber() {
-        //todo: feel free to change code as you need
         Sinks.Many<Integer> sink = Sinks.many().unicast().onBackpressureBuffer();
         Flux<Integer> measurements = sink.asFlux();
         submitOperation(() -> {
@@ -81,7 +77,6 @@ public class c8_Sinks extends SinksBase {
      */
     @Test
     public void it_gets_crowded() {
-        //todo: feel free to change code as you need
         Sinks.Many<Integer> sink = Sinks.many().multicast().onBackpressureBuffer();
         Flux<Integer> measurements = sink.asFlux();
         submitOperation(() -> {
@@ -149,7 +144,6 @@ public class c8_Sinks extends SinksBase {
      */
     @Test
     public void blue_jeans() {
-        //todo: enable autoCancel parameter to prevent sink from closing
         Sinks.Many<Integer> sink = Sinks.many().replay().all();
         Flux<Integer> flux = sink.asFlux();
 
@@ -192,12 +186,12 @@ public class c8_Sinks extends SinksBase {
      */
     @Test
     public void emit_failure() {
-        //todo: feel free to change code as you need
-        Sinks.Many<Integer> sink = Sinks.many().unicast().onBackpressureBuffer();
+        Sinks.Many<Integer> sink = Sinks.many().replay().all();
 
         for (int i = 1; i <= 50; i++) {
             int finalI = i;
-            new Thread(() -> sink.emitNext(finalI, (signalType, emitResult) -> true)).start();
+            new Thread(() -> sink.emitNext(finalI, (signalType, emitResult) -> emitResult
+                    .equals(Sinks.EmitResult.FAIL_NON_SERIALIZED))).start();
         }
 
         //don't change code below
